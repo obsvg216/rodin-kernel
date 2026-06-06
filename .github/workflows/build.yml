@@ -149,7 +149,7 @@ jobs:
           zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
 
       - name: Upload Kernel Flashable Zip
-        uses: actions/upload-artifact=v4
+        uses: actions/upload-artifact@v4
         with:
           name: Kernel-obsvg216-Flashable
           path: Kernel_obsvg216_Flashable.zip
