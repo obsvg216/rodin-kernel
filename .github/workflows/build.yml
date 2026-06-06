@@ -123,7 +123,7 @@ jobs:
           # CONFIG_SND_DEBUG is not set
 
           # =========================================================
-          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ MИКРОФРИЗЫ)
+          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ МИКРОФРИЗЫ)
           # =========================================================
           CONFIG_SYNC_FILE=y
           # CONFIG_DRM_FBDEV_EMULATION is not set
@@ -140,6 +140,8 @@ jobs:
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 $GITHUB_WORKSPACE/AnyKernel3
           rm -rf $GITHUB_WORKSPACE/AnyKernel3/.git
+          # Хак для 64-bit-only процессоров: клонируем стабильный arm64 бинарник на место 32-битного arm
+          cp $GITHUB_WORKSPACE/AnyKernel3/tools/busybox-arm64 $GITHUB_WORKSPACE/AnyKernel3/tools/busybox-arm
 
       - name: Package Kernel into Flashable Zip
         run: |
