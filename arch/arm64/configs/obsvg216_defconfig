@@ -7776,3 +7776,80 @@ CONFIG_ARCH_USE_MEMTEST=y
 #
 # end of Rust hacking
 # end of Kernel hacking
+# =========================================================
+#  ОПТИМИЗАЦИЯ BLUETOOTH & WI-FI (УБИРАЕМ ЗАИКАНИЯ 2.4 ГГц)
+# =========================================================
+CONFIG_WIRELESS=y
+CONFIG_WIRELESS_EXT=y
+CONFIG_WEXT_CORE=y
+CONFIG_WEXT_PROC=y
+CONFIG_WEXT_SPY=y
+CONFIG_WEXT_PRIV=y
+CONFIG_CFG80211=m
+CONFIG_CFG80211_DEFAULT_PS=y
+CONFIG_CFG80211_CRDA_SUPPORT=y
+CONFIG_MAC80211=m
+CONFIG_MAC80211_HAS_RC=y
+CONFIG_MAC80211_RC_MINSTRELS=y
+CONFIG_MAC80211_RC_MINSTRELS_HT=y
+CONFIG_MAC80211_RC_DEFAULT_MINSTRELS=y
+CONFIG_MAC80211_RC_DEFAULT="minstrel_ht"
+CONFIG_MAC80211_LEDS=y
+CONFIG_MAC80211_STA_HASH_MAX_SIZE=0
+CONFIG_BT_BCM=m
+CONFIG_BT_QCA=m
+CONFIG_BT_HCIBTSDIO=m
+CONFIG_BT_HCIUART=m
+CONFIG_BT_HCIUART_SERDEV=y
+CONFIG_BT_HCIUART_H4=y
+CONFIG_BT_HCIUART_LL=y
+CONFIG_BT_HCIUART_BCM=y
+CONFIG_BT_HCIUART_QCA=y
+CONFIG_BT_AOSPEXT=y
+CONFIG_STREAM_PARSER=y
+CONFIG_FIB_RULES=y
+
+# =========================================================
+#  МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ И ПЛАВНОСТЬ (Cortex-X4)
+# =========================================================
+CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+CONFIG_SCHED_WALT=y
+CONFIG_SCHED_AUTOGROUP=y
+CONFIG_IOSCHED_BFQ=y
+CONFIG_DEFAULT_BFQ=y
+CONFIG_ZRAM=n
+
+# =========================================================
+#  НИЗКАЯ ЗАДЕРЖКА И ОТЗЫВЧИВОСТЬ ИНТЕРФЕЙСА (LOW-LATENCY)
+# =========================================================
+CONFIG_PREEMPT=y
+# CONFIG_PREEMPT_NONE is not set
+# CONFIG_PREEMPT_VOLUNTARY is not set
+CONFIG_HZ_1000=y
+# CONFIG_HZ_300 is not set
+CONFIG_UNINLINE_SPIN_UNLOCK=y
+
+# =========================================================
+#  УДАЛЕНИЕ ОТЛАДОЧНОГО МУСОРА (ПРИРОСТ FPS И СТАБИЛЬНОСТЬ)
+# =========================================================
+# CONFIG_SLUB_DEBUG is not set
+# CONFIG_SCHED_DEBUG is not set
+# CONFIG_SCHEDSTATS is not set
+# CONFIG_DEBUG_MISC is not set
+# CONFIG_PROVE_LOCKING is not set
+# CONFIG_LOCKDEP is not set
+# CONFIG_PANIC_ON_OOPS is not set
+# CONFIG_REGMAP_ALLOW_WRITE_DEBUGFS is not set
+
+# =========================================================
+#  ОПТИМИЗАЦИЯ ЗВУКА И ЗВУКОВОГО ДВИЖКА (ALSA / AUDIO)
+# =========================================================
+CONFIG_SND_HRTIMER=y
+CONFIG_SND_SEQ_HRTIMER_DEFAULT=y
+# CONFIG_SND_DEBUG is not set
+
+# =========================================================
+#  ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ МИКРОФРИЗЫ СТАТТЕРЫ)
+# =========================================================
+CONFIG_SYNC_FILE=y
+# CONFIG_DRM_FBDEV_EMULATION is not set
