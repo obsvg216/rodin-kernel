@@ -91,8 +91,9 @@ jobs:
           CONFIG_UNINLINE_SPIN_UNLOCK=y
 
           # =========================================================
-          #  4. УДАЛЕНИЕ ОТЛАДОЧНОГО МУСОРА (ПРИРОСТ FPS И СТАБИЛЬНОСТЬ)
+          #  4. УДАЛЕНИЕ ОТЛАДОЧНОГО МУСОРА И ОБХОД ОШИБОК СБОРКИ
           # =========================================================
+          # CONFIG_IKHEADERS is not set
           # CONFIG_SLUB_DEBUG is not set
           # CONFIG_SCHED_DEBUG is not set
           # CONFIG_SCHEDSTATS is not set
@@ -148,7 +149,7 @@ jobs:
           zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
 
       - name: Upload Kernel Flashable Zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact=v4
         with:
           name: Kernel-obsvg216-Flashable
           path: Kernel_obsvg216_Flashable.zip
