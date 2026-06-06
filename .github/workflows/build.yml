@@ -15,9 +15,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Download Modern ZyC Clang (v20)
+      - name: Download Modern ZyC Clang (Main Dev Build)
         run: |
-          git clone https://github.com/ZyCromerZ/Clang.git --depth=1 -b 20 $GITHUB_WORKSPACE/zyc-clang
+          mkdir -p $GITHUB_WORKSPACE/zyc-clang
+          CLANG_URL=$(curl -s https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt)
+          curl -L "$CLANG_URL" -o zyc-clang.tar.gz
+          tar -xf zyc-clang.tar.gz -C zyc-clang
+          rm zyc-clang.tar.gz
 
       - name: Integrate KernelSU Next
         run: |
