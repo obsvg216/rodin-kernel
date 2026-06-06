@@ -10,6 +10,17 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
+      - name: Maximize Virtual Memory (Swap)
+        run: |
+          sudo swapoff -a
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          sudo sysctl vm.swappiness=100
+          free -h
+
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -112,7 +123,7 @@ jobs:
           # CONFIG_SND_DEBUG is not set
 
           # =========================================================
-          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ МИКРОФРИЗЫ)
+          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ MИКРОФРИЗЫ)
           # =========================================================
           CONFIG_SYNC_FILE=y
           # CONFIG_DRM_FBDEV_EMULATION is not set
