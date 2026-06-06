@@ -1,44 +1,3 @@
-name: Build Android Kernel
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build-kernel:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-
-      - name: Maximize Virtual Memory (Swap)
-        run: |
-          sudo swapoff -a
-          sudo rm -f /mnt/swapfile
-          sudo fallocate -l 8G /mnt/swapfile
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
-          sudo sysctl vm.swappiness=100
-          free -h
-
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
-
-      - name: Download Modern ZyC Clang (Main Dev Build)
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/zyc-clang
-          CLANG_URL=$(curl -s https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt)
-          curl -L "$CLANG_URL" -o zyc-clang.tar.gz
-          tar -xf zyc-clang.tar.gz -C zyc-clang
-          rm zyc-clang.tar.gz
-
-      - name: Integrate KernelSU Next
-        run: |
-          cd $GITHUB_WORKSPACE
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-
       - name: Inject Performance, BT and KSU Patches
         run: |
           cat << 'EOF' >> arch/arm64/configs/obsvg216_defconfig
@@ -49,7 +8,7 @@ jobs:
           CONFIG_KSU=y
 
           # =========================================================
-          #  1. ОПТИМИЗАЦИЯ BLUETOOTH & WI-FI (УБИРАЕМ ЗАИКАНИЯ 2.4 ГГц)
+          #  1. МОНОЛИТНЫЙ BLUETOOTH & WI-FI (ВШИВАЕМ ПРЯМО В ЯДРО)
           # =========================================================
           CONFIG_WIRELESS=y
           CONFIG_WIRELESS_EXT=y
@@ -57,21 +16,20 @@ jobs:
           CONFIG_WEXT_PROC=y
           CONFIG_WEXT_SPY=y
           CONFIG_WEXT_PRIV=y
-          CONFIG_CFG80211=m
+          CONFIG_CFG80211=y
           CONFIG_CFG80211_DEFAULT_PS=y
           CONFIG_CFG80211_CRDA_SUPPORT=y
-          CONFIG_MAC80211=m
+          CONFIG_MAC80211=y
           CONFIG_MAC80211_HAS_RC=y
           CONFIG_MAC80211_RC_MINSTRELS=y
           CONFIG_MAC80211_RC_MINSTRELS_HT=y
           CONFIG_MAC80211_RC_DEFAULT_MINSTRELS=y
           CONFIG_MAC80211_RC_DEFAULT="minstrel_ht"
           CONFIG_MAC80211_LEDS=y
-          CONFIG_MAC80211_STA_HASH_MAX_SIZE=0
-          CONFIG_BT_BCM=m
-          CONFIG_BT_QCA=m
-          CONFIG_BT_HCIBTSDIO=m
-          CONFIG_BT_HCIUART=m
+          CONFIG_BT_BCM=y
+          CONFIG_BT_QCA=y
+          CONFIG_BT_HCIBTSDIO=y
+          CONFIG_BT_HCIUART=y
           CONFIG_BT_HCIUART_SERDEV=y
           CONFIG_BT_HCIUART_H4=y
           CONFIG_BT_HCIUART_LL=y
@@ -82,14 +40,15 @@ jobs:
           CONFIG_FIB_RULES=y
 
           # =========================================================
-          #  2. МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ И ПЛАВНОСТЬ (WALT / BFQ)
+          #  2. СКОРОСТЬ СИСТЕМЫ И ВОЗВРАТ ZRAM (ДЛЯ СТАТУСА ЗАГРУЗКИ)
           # =========================================================
           CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
           CONFIG_SCHED_WALT=y
           CONFIG_SCHED_AUTOGROUP=y
           CONFIG_IOSCHED_BFQ=y
           CONFIG_DEFAULT_BFQ=y
-          CONFIG_ZRAM=n
+          CONFIG_ZRAM=y
+          CONFIG_ZRAM_WRITEBACK=y
 
           # =========================================================
           #  3. НИЗКАЯ ЗАДЕРЖКА И ОТЗЫВЧИВОСТЬ ИНТЕРФЕЙСА (LOW-LATENCY)
@@ -113,58 +72,4 @@ jobs:
           # CONFIG_PROVE_LOCKING is not set
           # CONFIG_LOCKDEP is not set
           # CONFIG_PANIC_ON_OOPS is not set
-          # CONFIG_REGMAP_ALLOW_WRITE_DEBUGFS is not set
-
-          # =========================================================
-          #  5. ОПТИМИЗАЦИЯ ЗВУКА И ЗВУКОВОГО ДВИЖКА (ALSA / AUDIO)
-          # =========================================================
-          CONFIG_SND_HRTIMER=y
-          CONFIG_SND_SEQ_HRTIMER_DEFAULT=y
-          # CONFIG_SND_DEBUG is not set
-
-          # =========================================================
-          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ МИКРОФРИЗЫ)
-          # =========================================================
-          CONFIG_SYNC_FILE=y
-          # CONFIG_DRM_FBDEV_EMULATION is not set
           EOF
-
-      - name: Compile Kernel
-        env:
-          PATH: ${{ github.workspace }}/zyc-clang/bin:/usr/bin:/bin
-        run: |
-          make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 obsvg216_defconfig
-          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- KCFLAGS="-Wno-error"
-
-      - name: Download and Setup AnyKernel3
-        run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 $GITHUB_WORKSPACE/AnyKernel3
-          rm -rf $GITHUB_WORKSPACE/AnyKernel3/.git
-          # Скачиваем чистый статический 64-битный Busybox и принудительно перезаписываем им стандартный 32-битный файл
-          curl -L "https://github.com/meefik/busybox/raw/master/binary/arm64/busybox" -o $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
-          chmod +x $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
-
-      - name: Package Kernel into Flashable Zip
-        run: |
-          cd $GITHUB_WORKSPACE
-          if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image AnyKernel3/
-          elif [ -f out/arch/arm64/boot/Image.gz ]; then
-            cp out/arch/arm64/boot/Image.gz AnyKernel3/
-          else
-            echo "Error: Kernel Image not found!" && exit 1
-          fi
-          
-          if [ -f out/arch/arm64/boot/dtbo.img ]; then
-            cp out/arch/arm64/boot/dtbo.img AnyKernel3/
-          fi
-
-          cd AnyKernel3
-          sed -i 's/do.deviceoverride=1/do.deviceoverride=0/g' anykernel.sh
-          zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
-
-      - name: Upload Kernel Flashable Zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kernel-obsvg216-Flashable
-          path: Kernel_obsvg216_Flashable.zip
