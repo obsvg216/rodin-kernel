@@ -13,16 +13,26 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5 lld llvm
 
       - name: Download ZyC Clang Toolchain
         run: |
           git clone https://github.com/ZyCromerZ/Clang.git --depth=1 -b main $GITHUB_WORKSPACE/zyc-clang
           echo "$GITHUB_WORKSPACE/zyc-clang/bin" >> $GITHUB_PATH
 
-      - name: Inject Performance and BT Patches
+      - name: Integrate KernelSU Next
+        run: |
+          cd $GITHUB_WORKSPACE
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+
+      - name: Inject Performance, BT and KSU Patches
         run: |
           cat << 'EOF' >> arch/arm64/configs/obsvg216_defconfig
+
+          # =========================================================
+          #  КЕРНЕЛ СУ НЕКСТ (ВСТРОЕННЫЙ РУТ-ДОСТУП)
+          # =========================================================
+          CONFIG_KSU=y
 
           # =========================================================
           #  1. ОПТИМИЗАЦИЯ BLUETOOTH & WI-FI (УБИРАЕМ ЗАИКАНИЯ 2.4 ГГц)
@@ -105,7 +115,8 @@ jobs:
 
       - name: Compile Kernel
         run: |
-          make O=out ARCH=arm64 obsvg216_defconfig
+          export PATH=$GITHUB_WORKSPACE/zyc-clang/bin:$PATH
+          make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 obsvg216_defconfig
           make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
 
       - name: Download and Setup AnyKernel3
@@ -116,8 +127,6 @@ jobs:
       - name: Package Kernel into Flashable Zip
         run: |
           cd $GITHUB_WORKSPACE
-          
-          # Проверяем наличие скомпилированного файла ядра и копируем его в AnyKernel
           if [ -f out/arch/arm64/boot/Image ]; then
             cp out/arch/arm64/boot/Image AnyKernel3/
           elif [ -f out/arch/arm64/boot/Image.gz ]; then
@@ -126,16 +135,12 @@ jobs:
             echo "Error: Kernel Image not found!" && exit 1
           fi
           
-          # Если в процессе сборки также создался раздельный dtbo.img, закидываем и его
           if [ -f out/arch/arm64/boot/dtbo.img ]; then
             cp out/arch/arm64/boot/dtbo.img AnyKernel3/
           fi
 
-          # Отключаем жесткую проверку модели устройства в скрипте (чтобы избежать ложных ошибок совместимости в TWRP)
           cd AnyKernel3
           sed -i 's/do.deviceoverride=1/do.deviceoverride=0/g' anykernel.sh
-          
-          # Упаковываем все файлы AnyKernel3 в готовый zip-архив
           zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
 
       - name: Upload Kernel Flashable Zip
@@ -143,4 +148,3 @@ jobs:
         with:
           name: Kernel-obsvg216-Flashable
           path: Kernel_obsvg216_Flashable.zip
-          
