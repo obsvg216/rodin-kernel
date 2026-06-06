@@ -1,3 +1,44 @@
+name: Build Android Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+
+      - name: Maximize Virtual Memory (Swap)
+        run: |
+          sudo swapoff -a
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          sudo sysctl vm.swappiness=100
+          free -h
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Download Modern ZyC Clang (Main Dev Build)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/zyc-clang
+          CLANG_URL=$(curl -s https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt)
+          curl -L "$CLANG_URL" -o zyc-clang.tar.gz
+          tar -xf zyc-clang.tar.gz -C zyc-clang
+          rm zyc-clang.tar.gz
+
+      - name: Integrate KernelSU Next
+        run: |
+          cd $GITHUB_WORKSPACE
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+
       - name: Inject Performance, BT and KSU Patches
         run: |
           cat << 'EOF' >> arch/arm64/configs/obsvg216_defconfig
@@ -73,3 +114,50 @@
           # CONFIG_LOCKDEP is not set
           # CONFIG_PANIC_ON_OOPS is not set
           EOF
+
+      - name: Compile Kernel
+        env:
+          PATH: ${{ github.workspace }}/zyc-clang/bin:/usr/bin:/bin
+        run: |
+          make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 obsvg216_defconfig
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- KCFLAGS="-Wno-error"
+
+      - name: Force Gzip Compression (Create Image.gz)
+        run: |
+          cd $GITHUB_WORKSPACE
+          if [ -f out/arch/arm64/boot/Image ]; then
+            echo "Compressing raw Image to Image.gz..."
+            gzip -n -9 < out/arch/arm64/boot/Image > out/arch/arm64/boot/Image.gz
+          else
+            echo "Error: Base Image file not found!" && exit 1
+          fi
+
+      - name: Download and Setup AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 $GITHUB_WORKSPACE/AnyKernel3
+          rm -rf $GITHUB_WORKSPACE/AnyKernel3/.git
+          curl -L "https://github.com/meefik/busybox/raw/master/binary/arm64/busybox" -o $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
+          chmod +x $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
+
+      - name: Package Kernel into Flashable Zip
+        run: |
+          cd $GITHUB_WORKSPACE
+          if [ -f out/arch/arm64/boot/Image.gz ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          else
+            echo "Error: Image.gz not found!" && exit 1
+          fi
+          
+          if [ -f out/arch/arm64/boot/dtbo.img ]; then
+            cp out/arch/arm64/boot/dtbo.img AnyKernel3/
+          fi
+
+          cd AnyKernel3
+          sed -i 's/do.deviceoverride=1/do.deviceoverride=0/g' anykernel.sh
+          zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
+
+      - name: Upload Kernel Flashable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-obsvg216-Flashable
+          path: Kernel_obsvg216_Flashable.zip
