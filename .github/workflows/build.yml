@@ -1,0 +1,146 @@
+name: Build Android Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo5
+
+      - name: Download ZyC Clang Toolchain
+        run: |
+          git clone https://github.com/ZyCromerZ/Clang.git --depth=1 -b main $GITHUB_WORKSPACE/zyc-clang
+          echo "$GITHUB_WORKSPACE/zyc-clang/bin" >> $GITHUB_PATH
+
+      - name: Inject Performance and BT Patches
+        run: |
+          cat << 'EOF' >> arch/arm64/configs/obsvg216_defconfig
+
+          # =========================================================
+          #  1. ОПТИМИЗАЦИЯ BLUETOOTH & WI-FI (УБИРАЕМ ЗАИКАНИЯ 2.4 ГГц)
+          # =========================================================
+          CONFIG_WIRELESS=y
+          CONFIG_WIRELESS_EXT=y
+          CONFIG_WEXT_CORE=y
+          CONFIG_WEXT_PROC=y
+          CONFIG_WEXT_SPY=y
+          CONFIG_WEXT_PRIV=y
+          CONFIG_CFG80211=m
+          CONFIG_CFG80211_DEFAULT_PS=y
+          CONFIG_CFG80211_CRDA_SUPPORT=y
+          CONFIG_MAC80211=m
+          CONFIG_MAC80211_HAS_RC=y
+          CONFIG_MAC80211_RC_MINSTRELS=y
+          CONFIG_MAC80211_RC_MINSTRELS_HT=y
+          CONFIG_MAC80211_RC_DEFAULT_MINSTRELS=y
+          CONFIG_MAC80211_RC_DEFAULT="minstrel_ht"
+          CONFIG_MAC80211_LEDS=y
+          CONFIG_MAC80211_STA_HASH_MAX_SIZE=0
+          CONFIG_BT_BCM=m
+          CONFIG_BT_QCA=m
+          CONFIG_BT_HCIBTSDIO=m
+          CONFIG_BT_HCIUART=m
+          CONFIG_BT_HCIUART_SERDEV=y
+          CONFIG_BT_HCIUART_H4=y
+          CONFIG_BT_HCIUART_LL=y
+          CONFIG_BT_HCIUART_BCM=y
+          CONFIG_BT_HCIUART_QCA=y
+          CONFIG_BT_AOSPEXT=y
+          CONFIG_STREAM_PARSER=y
+          CONFIG_FIB_RULES=y
+
+          # =========================================================
+          #  2. МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ И ПЛАВНОСТЬ (WALT / BFQ)
+          # =========================================================
+          CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+          CONFIG_SCHED_WALT=y
+          CONFIG_SCHED_AUTOGROUP=y
+          CONFIG_IOSCHED_BFQ=y
+          CONFIG_DEFAULT_BFQ=y
+          CONFIG_ZRAM=n
+
+          # =========================================================
+          #  3. НИЗКАЯ ЗАДЕРЖКА И ОТЗЫВЧИВОСТЬ ИНТЕРФЕЙСА (LOW-LATENCY)
+          # =========================================================
+          CONFIG_PREEMPT=y
+          # CONFIG_PREEMPT_NONE is not set
+          # CONFIG_PREEMPT_VOLUNTARY is not set
+          CONFIG_HZ_1000=y
+          # CONFIG_HZ_300 is not set
+          CONFIG_UNINLINE_SPIN_UNLOCK=y
+
+          # =========================================================
+          #  4. УДАЛЕНИЕ ОТЛАДОЧНОГО МУСОРА (ПРИРОСТ FPS И СТАБИЛЬНОСТЬ)
+          # =========================================================
+          # CONFIG_SLUB_DEBUG is not set
+          # CONFIG_SCHED_DEBUG is not set
+          # CONFIG_SCHEDSTATS is not set
+          # CONFIG_DEBUG_MISC is not set
+          # CONFIG_PROVE_LOCKING is not set
+          # CONFIG_LOCKDEP is not set
+          # CONFIG_PANIC_ON_OOPS is not set
+          # CONFIG_REGMAP_ALLOW_WRITE_DEBUGFS is not set
+
+          # =========================================================
+          #  5. ОПТИМИЗАЦИЯ ЗВУКА И ЗВУКОВОГО ДВИЖКА (ALSA / AUDIO)
+          # =========================================================
+          CONFIG_SND_HRTIMER=y
+          CONFIG_SND_SEQ_HRTIMER_DEFAULT=y
+          # CONFIG_SND_DEBUG is not set
+
+          # =========================================================
+          #  6. ГРАФИКА И СИНХРОНИЗАЦИЯ КАДРОВ (УБИРАЕМ МИКРОФРИЗЫ)
+          # =========================================================
+          CONFIG_SYNC_FILE=y
+          # CONFIG_DRM_FBDEV_EMULATION is not set
+          EOF
+
+      - name: Compile Kernel
+        run: |
+          make O=out ARCH=arm64 obsvg216_defconfig
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+
+      - name: Download and Setup AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 $GITHUB_WORKSPACE/AnyKernel3
+          rm -rf $GITHUB_WORKSPACE/AnyKernel3/.git
+
+      - name: Package Kernel into Flashable Zip
+        run: |
+          cd $GITHUB_WORKSPACE
+          
+          # Проверяем наличие скомпилированного файла ядра и копируем его в AnyKernel
+          if [ -f out/arch/arm64/boot/Image ]; then
+            cp out/arch/arm64/boot/Image AnyKernel3/
+          elif [ -f out/arch/arm64/boot/Image.gz ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          else
+            echo "Error: Kernel Image not found!" && exit 1
+          fi
+          
+          # Если в процессе сборки также создался раздельный dtbo.img, закидываем и его
+          if [ -f out/arch/arm64/boot/dtbo.img ]; then
+            cp out/arch/arm64/boot/dtbo.img AnyKernel3/
+          fi
+
+          # Отключаем жесткую проверку модели устройства в скрипте (чтобы избежать ложных ошибок совместимости в TWRP)
+          cd AnyKernel3
+          sed -i 's/do.deviceoverride=1/do.deviceoverride=0/g' anykernel.sh
+          
+          # Упаковываем все файлы AnyKernel3 в готовый zip-архив
+          zip -r9 ../Kernel_obsvg216_Flashable.zip * -x README.md
+
+      - name: Upload Kernel Flashable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-obsvg216-Flashable
+          path: Kernel_obsvg216_Flashable.zip
+          
