@@ -140,8 +140,9 @@ jobs:
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 $GITHUB_WORKSPACE/AnyKernel3
           rm -rf $GITHUB_WORKSPACE/AnyKernel3/.git
-          # Хак для 64-bit-only процессоров: клонируем стабильный arm64 бинарник на место 32-битного arm
-          cp $GITHUB_WORKSPACE/AnyKernel3/tools/busybox-arm64 $GITHUB_WORKSPACE/AnyKernel3/tools/busybox-arm
+          # Скачиваем чистый статический 64-битный Busybox и принудительно перезаписываем им стандартный 32-битный файл
+          curl -L "https://github.com/meefik/busybox/raw/master/binary/arm64/busybox" -o $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
+          chmod +x $GITHUB_WORKSPACE/AnyKernel3/tools/busybox
 
       - name: Package Kernel into Flashable Zip
         run: |
